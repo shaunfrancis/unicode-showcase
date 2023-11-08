@@ -1,2 +1,2 @@
-# unicode-showcase
+# Unicode Showcase
 A Twitter bot to celebrate each and every character in the Unicode standard, once every three hours.
