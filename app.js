@@ -43,6 +43,7 @@ var fontkit = require("fontkit");
 var canvas_1 = require("canvas");
 var twitter_api_v2_1 = require("twitter-api-v2");
 var node_schedule_1 = require("node-schedule");
+var notos = ["Kufi Arabic", "Mono", "Naskh Arabic", "Naskh Arabic UI", "Nastaliq Urdu", "Sans", "Sans Adlam", "Sans Adlam Unjoined", "Sans Anatolian Hieroglyphs", "Sans Arabic", "Sans Arabic UI", "Sans Armenian", "Sans Avestan", "Sans Bamum", "Sans Batak", "Sans Bengali", "Sans Bengali UI", "Sans Buhid", "Sans Canadian Aboriginal", "Sans Carian", "Sans Chakma", "Sans Cham", "Sans Cherokee", "Sans CJK JP", "Sans CJK KR", "Sans CJK SC", "Sans CJK TC", "Sans Cuneiform", "Sans Cypriot", "Sans Deseret", "Sans Devanagari", "Sans Devanagari UI", "Sans Display", "Sans Egyptian Hieroglyphs", "Sans Ethiopic", "Sans Georgian", "Sans Glagolitic", "Sans Gothic", "Sans Gujarati", "Sans Gujarati UI", "Sans Gurmukhi", "Sans Gurmukhi UI", "Sans Hanunoo", "Sans Hebrew", "Sans Imperial Aramaic", "Sans Inscriptional Pahlavi", "Sans Inscriptional Parthian", "Sans Javanese", "Sans Kannada", "Sans Kannada UI", "Sans Kayah Li", "Sans Khmer", "Sans Khmer UI", "Sans Lao", "Sans Lao UI", "Sans Linear B", "Sans Lisu", "Sans Lycian", "Sans Lydian", "Sans Malayalam", "Sans Malayalam UI", "Sans Mandaic", "Sans Mono", "Sans Mono CJK JP", "Sans Mono CJK KR", "Sans Mono CJK SC", "Sans Mono CJK TC", "Sans Myanmar", "Sans Myanmar UI", "Sans New Tai Lue", "Sans NKo", "Sans Ogham", "Sans Ol Chiki", "Sans Old Italic", "Sans Old Persian", "Sans Old South Arabian", "Sans Old Turkic", "Sans Oriya", "Sans Oriya UI", "Sans Osage", "Sans Osmanya", "Sans Phoenician", "Sans Runic", "Sans Samaritan", "Sans Shavian", "Sans Sinhala", "Sans Sinhala UI", "Sans Symbols", "Sans Symbols2", "Sans Syriac Eastern", "Sans Syriac Estrangela", "Sans Syriac Western", "Sans Tai Tham", "Sans Tamil", "Sans Tamil UI", "Sans Telugu", "Sans Telugu UI", "Sans Thaana", "Sans Thai", "Sans Thai UI", "Sans Tibetan", "Sans Tifinagh", "Sans Ugaritic", "Sans Vai", "Sans Yi"];
 var client = new twitter_api_v2_1.TwitterApi({
     appKey: process.env.CONSUMER_KEY,
     appSecret: process.env.CONSUMER_SECRET,
@@ -95,19 +96,13 @@ function plannedSequence() {
         return false;
 }
 function getTypeface(character) {
-    var notos = ["Kufi Arabic", "Mono", "Naskh Arabic", "Naskh Arabic UI", "Nastaliq Urdu", "Sans", "Sans Adlam", "Sans Adlam Unjoined", "Sans Anatolian Hieroglyphs", "Sans Arabic", "Sans Arabic UI", "Sans Armenian", "Sans Avestan", "Sans Bamum", "Sans Batak", "Sans Bengali", "Sans Bengali UI", "Sans Buhid", "Sans Canadian Aboriginal", "Sans Carian", "Sans Chakma", "Sans Cham", "Sans Cherokee", "Sans CJK JP", "Sans CJK KR", "Sans CJK SC", "Sans CJK TC", "Sans Cuneiform", "Sans Cypriot", "Sans Deseret", "Sans Devanagari", "Sans Devanagari UI", "Sans Display", "Sans Egyptian Hieroglyphs", "Sans Ethiopic", "Sans Georgian", "Sans Glagolitic", "Sans Gothic", "Sans Gujarati", "Sans Gujarati UI", "Sans Gurmukhi", "Sans Gurmukhi UI", "Sans Hanunoo", "Sans Hebrew", "Sans Imperial Aramaic", "Sans Inscriptional Pahlavi", "Sans Inscriptional Parthian", "Sans Javanese", "Sans Kannada", "Sans Kannada UI", "Sans Kayah Li", "Sans Khmer", "Sans Khmer UI", "Sans Lao", "Sans Lao UI", "Sans Linear B", "Sans Lisu", "Sans Lycian", "Sans Lydian", "Sans Malayalam", "Sans Malayalam UI", "Sans Mandaic", "Sans Mono", "Sans Mono CJK JP", "Sans Mono CJK KR", "Sans Mono CJK SC", "Sans Mono CJK TC", "Sans Myanmar", "Sans Myanmar UI", "Sans New Tai Lue", "Sans NKo", "Sans Ogham", "Sans Ol Chiki", "Sans Old Italic", "Sans Old Persian", "Sans Old South Arabian", "Sans Old Turkic", "Sans Oriya", "Sans Oriya UI", "Sans Osage", "Sans Osmanya", "Sans Phoenician", "Sans Runic", "Sans Samaritan", "Sans Shavian", "Sans Sinhala", "Sans Sinhala UI", "Sans Symbols", "Sans Symbols2", "Sans Syriac Eastern", "Sans Syriac Estrangela", "Sans Syriac Western", "Sans Tai Tham", "Sans Tamil", "Sans Tamil UI", "Sans Telugu", "Sans Telugu UI", "Sans Thaana", "Sans Thai", "Sans Thai UI", "Sans Tibetan", "Sans Tifinagh", "Sans Ugaritic", "Sans Vai", "Sans Yi"];
     //Check each Noto font
     for (var i = 0; i < notos.length; i++) {
-        var dir = void 0;
-        if (notos[i].indexOf("CJK") != -1)
-            dir = 'fonts/Noto' + (notos[i].slice(0, notos[i].length - 2) + notos[i].slice(notos[i].length - 2, notos[i].length).toLowerCase()).replace(/ /g, '') + "-Regular.otf";
-        else
-            dir = 'fonts/Noto' + notos[i].replace(/ /g, '') + "-Regular.ttf";
-        var font_1 = fontkit.openSync(dir);
-        if (font_1 && font_1.characterSet.indexOf(character.code) != -1) {
+        var font_1 = fontkit.openSync(getNotoDir(notos[i]));
+        if (font_1 && font_1.characterSet.indexOf(character.code) != -1)
             return "'Noto " + notos[i] + "'";
-        }
     }
+    ;
     //Then try emojis
     if (emojiExistsFor(character.utf16Code))
         return "Apple Color Emoji";
@@ -381,8 +376,20 @@ function importUnihanReadings() {
     });
     return han;
 }
+function registerFonts() {
+    notos.forEach(function (noto) { (0, canvas_1.registerFont)(getNotoDir(noto), { family: 'Noto ' + noto }); });
+    (0, canvas_1.registerFont)('fonts/Cambria Math.ttf', { family: 'Cambria Math' });
+}
+function getNotoDir(name) {
+    if (name.indexOf("CJK") != -1) {
+        return 'fonts/Noto' + (name.slice(0, name.length - 2) + name.slice(name.length - 2, name.length).toLowerCase()).replace(/ /g, '') + '-Regular.otf';
+    }
+    else
+        return 'fonts/Noto' + name.replace(/ /g, '') + '-Regular.ttf';
+}
 function init() {
     var han = importUnihanReadings();
+    registerFonts();
     (0, node_schedule_1.scheduleJob)('0 */3 * * *', function () {
         createPost(han);
     });
