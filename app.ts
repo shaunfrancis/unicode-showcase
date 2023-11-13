@@ -333,7 +333,7 @@ function getText(character: Character){
         outro: ["","You rock!","You're amazing!","We love you!","Keep up the good work.","You're incredible!","You rule!","You're the best!"]
     }
     
-    const characterDescription = "U+" + character.utf16Code + " " + character.name;
+    const characterDescription = character.symbol + " U+" + character.utf16Code + " " + character.name;
     const maxLength = 280 - characterDescription.length;
 
     let intro : string, description : string, punctuation : string, outro : string;
@@ -397,7 +397,6 @@ function init(){
     scheduleJob('0 */3 * * *', function(){
         createPost(han);
     });
-    createPost(han);
     
 }
 

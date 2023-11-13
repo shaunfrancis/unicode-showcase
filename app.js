@@ -326,7 +326,7 @@ function getText(character) {
         description: ["", "the one, the only, ", "our old friend ", "the very special ", "the one-of-a-kind ", "the one and only ", "our friend ", "the brilliant ", "the fantastic ", "the exquisite ", "the super "],
         outro: ["", "You rock!", "You're amazing!", "We love you!", "Keep up the good work.", "You're incredible!", "You rule!", "You're the best!"]
     };
-    var characterDescription = "U+" + character.utf16Code + " " + character.name;
+    var characterDescription = character.symbol + " U+" + character.utf16Code + " " + character.name;
     var maxLength = 280 - characterDescription.length;
     var intro, description, punctuation, outro;
     while (!intro || intro.length + description.length + punctuation.length + outro.length > maxLength) {
@@ -393,6 +393,5 @@ function init() {
     (0, node_schedule_1.scheduleJob)('0 */3 * * *', function () {
         createPost(han);
     });
-    createPost(han);
 }
 init();
