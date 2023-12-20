@@ -38,24 +38,30 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 var fs = require("node:fs");
+var https = require("https");
 var unicharadata = require("unicharadata");
 var fontkit = require("fontkit");
 var canvas_1 = require("canvas");
-var twitter_api_v2_1 = require("twitter-api-v2");
 var node_schedule_1 = require("node-schedule");
+var twitter_api_v2_1 = require("twitter-api-v2");
+var instagram_graph_api_1 = require("instagram-graph-api");
 var notos = ["Kufi Arabic", "Mono", "Naskh Arabic", "Naskh Arabic UI", "Nastaliq Urdu", "Sans", "Sans Adlam", "Sans Adlam Unjoined", "Sans Anatolian Hieroglyphs", "Sans Arabic", "Sans Arabic UI", "Sans Armenian", "Sans Avestan", "Sans Bamum", "Sans Batak", "Sans Bengali", "Sans Bengali UI", "Sans Buhid", "Sans Canadian Aboriginal", "Sans Carian", "Sans Chakma", "Sans Cham", "Sans Cherokee", "Sans CJK JP", "Sans CJK KR", "Sans CJK SC", "Sans CJK TC", "Sans Cuneiform", "Sans Cypriot", "Sans Deseret", "Sans Devanagari", "Sans Devanagari UI", "Sans Display", "Sans Egyptian Hieroglyphs", "Sans Ethiopic", "Sans Georgian", "Sans Glagolitic", "Sans Gothic", "Sans Gujarati", "Sans Gujarati UI", "Sans Gurmukhi", "Sans Gurmukhi UI", "Sans Hanunoo", "Sans Hebrew", "Sans Imperial Aramaic", "Sans Inscriptional Pahlavi", "Sans Inscriptional Parthian", "Sans Javanese", "Sans Kannada", "Sans Kannada UI", "Sans Kayah Li", "Sans Khmer", "Sans Khmer UI", "Sans Lao", "Sans Lao UI", "Sans Linear B", "Sans Lisu", "Sans Lycian", "Sans Lydian", "Sans Malayalam", "Sans Malayalam UI", "Sans Mandaic", "Sans Mono", "Sans Mono CJK JP", "Sans Mono CJK KR", "Sans Mono CJK SC", "Sans Mono CJK TC", "Sans Myanmar", "Sans Myanmar UI", "Sans New Tai Lue", "Sans NKo", "Sans Ogham", "Sans Ol Chiki", "Sans Old Italic", "Sans Old Persian", "Sans Old South Arabian", "Sans Old Turkic", "Sans Oriya", "Sans Oriya UI", "Sans Osage", "Sans Osmanya", "Sans Phoenician", "Sans Runic", "Sans Samaritan", "Sans Shavian", "Sans Sinhala", "Sans Sinhala UI", "Sans Symbols", "Sans Symbols2", "Sans Syriac Eastern", "Sans Syriac Estrangela", "Sans Syriac Western", "Sans Tai Tham", "Sans Tamil", "Sans Tamil UI", "Sans Telugu", "Sans Telugu UI", "Sans Thaana", "Sans Thai", "Sans Thai UI", "Sans Tibetan", "Sans Tifinagh", "Sans Ugaritic", "Sans Vai", "Sans Yi"];
-var client = new twitter_api_v2_1.TwitterApi({
-    appKey: process.env.CONSUMER_KEY,
-    appSecret: process.env.CONSUMER_SECRET,
-    accessToken: process.env.ACCESS_TOKEN,
-    accessSecret: process.env.ACCESS_SECRET
+var twitterClient = new twitter_api_v2_1.TwitterApi({
+    appKey: process.env.TWITTER_CONSUMER_KEY,
+    appSecret: process.env.TWITTER_CONSUMER_SECRET,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN,
+    accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
-function createPost(han) {
+var instagramClient = new instagram_graph_api_1.Client(process.env.INSTAGRAM_ACCESS_TOKEN, process.env.INSTAGRAM_PAGE_ID);
+function createPost(han, retryCount) {
+    if (retryCount === void 0) { retryCount = 0; }
     return __awaiter(this, void 0, void 0, function () {
-        var character, typeface, imageBuffer, text;
+        var character, typeface, imageBuffer, text, post;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
+                    if (retryCount >= 5)
+                        return [2 /*return*/];
                     character = getCharacter();
                     if (character.utf16Code in han)
                         character.definition = han[character.utf16Code];
@@ -66,7 +72,13 @@ function createPost(han) {
                 case 1:
                     imageBuffer = _a.sent();
                     text = getText(character);
-                    post(imageBuffer, text);
+                    return [4 /*yield*/, postToInstagram(imageBuffer, text)];
+                case 2:
+                    post = _a.sent();
+                    if (!post)
+                        setTimeout(function () {
+                            createPost(han, retryCount + 1);
+                        }, 120000);
                     return [2 /*return*/];
             }
         });
@@ -206,7 +218,7 @@ function draw(character, typeface) {
                 case 3:
                     _a.sent();
                     _a.label = 4;
-                case 4: return [2 /*return*/, canvas.toBuffer()];
+                case 4: return [2 /*return*/, canvas.toBuffer('image/jpeg')];
             }
         });
     });
@@ -344,21 +356,142 @@ function emojiFileFor(utf16Code) {
     else if (fs.existsSync(u + '.0.png'))
         return u + '.0.png';
 }
-function post(image, text) {
+function postToTwitter(image, text) {
     return __awaiter(this, void 0, void 0, function () {
-        var mediaId;
+        var mediaId, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, client.v1.uploadMedia(image, { mimeType: "image/png" })];
+                case 0:
+                    _a.trys.push([0, 3, , 4]);
+                    return [4 /*yield*/, twitterClient.v1.uploadMedia(image, { mimeType: "image/png" })];
                 case 1:
                     mediaId = _a.sent();
-                    return [4 /*yield*/, client.v2.tweet({
+                    return [4 /*yield*/, twitterClient.v2.tweet({
                             text: text,
                             media: { media_ids: [mediaId] }
                         })];
                 case 2:
                     _a.sent();
-                    return [2 /*return*/];
+                    return [2 /*return*/, true];
+                case 3:
+                    error_1 = _a.sent();
+                    return [2 /*return*/, false];
+                case 4: return [2 /*return*/];
+            }
+        });
+    });
+}
+function postToTennessine(image) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/, new Promise(function (resolve, reject) {
+                    var postData = JSON.stringify({
+                        'image': image.toString('base64'),
+                        'access_token': process.env.SERVER_ACCESS_TOKEN
+                    });
+                    var options = {
+                        hostname: "tennessine.co.uk",
+                        post: 443,
+                        path: "/unicode/upload.php",
+                        method: "POST",
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Content-Length': postData.length
+                        }
+                    };
+                    var uploadRequest = https.request(options, function (response) {
+                        var body = "";
+                        response.on("data", function (chunk) {
+                            body += chunk;
+                        });
+                        response.on("end", function () {
+                            if (response.statusCode == 200)
+                                resolve();
+                            else {
+                                console.log(response.statusCode + " " + body);
+                                reject(response.statusCode);
+                            }
+                        });
+                    });
+                    uploadRequest.write(postData);
+                    uploadRequest.end();
+                })];
+        });
+    });
+}
+function postToInstagram(image, text) {
+    return __awaiter(this, void 0, void 0, function () {
+        var statusCode_1, url, mediaRequest, mediaResponse_1, queryContainerReadiness_1, isReady, publishRequest, error_2;
+        var _this = this;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    _a.trys.push([0, 2, , 3]);
+                    return [4 /*yield*/, postToTennessine(image)];
+                case 1:
+                    _a.sent();
+                    return [3 /*break*/, 3];
+                case 2:
+                    statusCode_1 = _a.sent();
+                    return [2 /*return*/, false];
+                case 3:
+                    url = "https://tennessine.co.uk/unicode/next_image.jpg?cache=" + Date.now();
+                    mediaRequest = instagramClient.newPostPagePhotoMediaRequest(url, text);
+                    _a.label = 4;
+                case 4:
+                    _a.trys.push([4, 8, , 9]);
+                    return [4 /*yield*/, mediaRequest.execute()];
+                case 5:
+                    mediaResponse_1 = _a.sent();
+                    queryContainerReadiness_1 = function (n) {
+                        if (n === void 0) { n = 0; }
+                        return new Promise(function (resolve) { return __awaiter(_this, void 0, void 0, function () {
+                            var containerRequest, containerResponse;
+                            var _this = this;
+                            return __generator(this, function (_a) {
+                                switch (_a.label) {
+                                    case 0:
+                                        containerRequest = instagramClient.newGetContainerRequest(mediaResponse_1.getId());
+                                        return [4 /*yield*/, containerRequest.execute()];
+                                    case 1:
+                                        containerResponse = _a.sent();
+                                        if (!containerResponse || !containerResponse.getContainerStatusCode() || containerResponse.getContainerStatusCode() != "FINISHED") {
+                                            if (n >= 5)
+                                                resolve(false);
+                                            setTimeout(function () { return __awaiter(_this, void 0, void 0, function () {
+                                                var newQuery;
+                                                return __generator(this, function (_a) {
+                                                    switch (_a.label) {
+                                                        case 0: return [4 /*yield*/, queryContainerReadiness_1(n + 1)];
+                                                        case 1:
+                                                            newQuery = _a.sent();
+                                                            resolve(newQuery);
+                                                            return [2 /*return*/];
+                                                    }
+                                                });
+                                            }); }, 60000);
+                                        }
+                                        else
+                                            resolve(true);
+                                        return [2 /*return*/];
+                                }
+                            });
+                        }); });
+                    };
+                    return [4 /*yield*/, queryContainerReadiness_1()];
+                case 6:
+                    isReady = _a.sent();
+                    if (!isReady)
+                        throw new Error("Upload failed");
+                    publishRequest = instagramClient.newPostPublishMediaRequest(mediaResponse_1.getId());
+                    return [4 /*yield*/, publishRequest.execute()];
+                case 7:
+                    _a.sent();
+                    return [2 /*return*/, true];
+                case 8:
+                    error_2 = _a.sent();
+                    return [2 /*return*/, false];
+                case 9: return [2 /*return*/];
             }
         });
     });
@@ -393,5 +526,6 @@ function init() {
     (0, node_schedule_1.scheduleJob)('0 */3 * * *', function () {
         createPost(han);
     });
+    createPost(han);
 }
 init();

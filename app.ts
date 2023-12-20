@@ -1,10 +1,13 @@
 import 'dotenv/config';
 import * as fs from 'node:fs';
+import * as https from 'https';
 import * as unicharadata from 'unicharadata';
 import * as fontkit from 'fontkit';
 import { createCanvas, registerFont, Canvas, Image } from 'canvas';
-import { TwitterApi } from 'twitter-api-v2';
 import { scheduleJob } from 'node-schedule';
+
+import { TwitterApi } from 'twitter-api-v2';
+import { Client } from 'instagram-graph-api';
 
 type stringDict = { [key:string]: string };
 interface Character {
@@ -17,15 +20,19 @@ interface Character {
 
 const notos = ["Kufi Arabic","Mono","Naskh Arabic","Naskh Arabic UI","Nastaliq Urdu","Sans","Sans Adlam","Sans Adlam Unjoined","Sans Anatolian Hieroglyphs","Sans Arabic","Sans Arabic UI","Sans Armenian","Sans Avestan","Sans Bamum","Sans Batak","Sans Bengali","Sans Bengali UI","Sans Buhid","Sans Canadian Aboriginal","Sans Carian","Sans Chakma","Sans Cham","Sans Cherokee","Sans CJK JP","Sans CJK KR","Sans CJK SC","Sans CJK TC","Sans Cuneiform","Sans Cypriot","Sans Deseret","Sans Devanagari","Sans Devanagari UI","Sans Display","Sans Egyptian Hieroglyphs","Sans Ethiopic","Sans Georgian","Sans Glagolitic","Sans Gothic","Sans Gujarati","Sans Gujarati UI","Sans Gurmukhi","Sans Gurmukhi UI","Sans Hanunoo","Sans Hebrew","Sans Imperial Aramaic","Sans Inscriptional Pahlavi","Sans Inscriptional Parthian","Sans Javanese","Sans Kannada","Sans Kannada UI","Sans Kayah Li","Sans Khmer","Sans Khmer UI","Sans Lao","Sans Lao UI","Sans Linear B","Sans Lisu","Sans Lycian","Sans Lydian","Sans Malayalam","Sans Malayalam UI","Sans Mandaic","Sans Mono","Sans Mono CJK JP","Sans Mono CJK KR","Sans Mono CJK SC","Sans Mono CJK TC","Sans Myanmar","Sans Myanmar UI","Sans New Tai Lue","Sans NKo","Sans Ogham","Sans Ol Chiki","Sans Old Italic","Sans Old Persian","Sans Old South Arabian","Sans Old Turkic","Sans Oriya","Sans Oriya UI","Sans Osage","Sans Osmanya","Sans Phoenician","Sans Runic","Sans Samaritan","Sans Shavian","Sans Sinhala","Sans Sinhala UI","Sans Symbols","Sans Symbols2","Sans Syriac Eastern","Sans Syriac Estrangela","Sans Syriac Western","Sans Tai Tham","Sans Tamil","Sans Tamil UI","Sans Telugu","Sans Telugu UI","Sans Thaana","Sans Thai","Sans Thai UI","Sans Tibetan","Sans Tifinagh","Sans Ugaritic","Sans Vai","Sans Yi"];
 
-const client = new TwitterApi({
-    appKey: process.env.CONSUMER_KEY,
-    appSecret: process.env.CONSUMER_SECRET,
-    accessToken: process.env.ACCESS_TOKEN,
-    accessSecret: process.env.ACCESS_SECRET
+const twitterClient = new TwitterApi({
+    appKey: process.env.TWITTER_CONSUMER_KEY,
+    appSecret: process.env.TWITTER_CONSUMER_SECRET,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN,
+    accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
 
+const instagramClient = new Client(process.env.INSTAGRAM_ACCESS_TOKEN, process.env.INSTAGRAM_PAGE_ID);
 
-async function createPost(han: stringDict){
+
+async function createPost(han: stringDict, retryCount: number = 0){
+    if(retryCount >= 5) return;
+
     const character: Character = getCharacter();
 
     if(character.utf16Code in han) character.definition = han[character.utf16Code];
@@ -35,7 +42,11 @@ async function createPost(han: stringDict){
 
     const imageBuffer = await draw(character, typeface);
     const text = getText(character);
-    post(imageBuffer, text);
+    
+    const post = await postToInstagram(imageBuffer, text);
+    if(!post) setTimeout( () => {
+        createPost(han, retryCount+1);
+    }, 120000);
 }
 
 function getCharacter() : Character{
@@ -179,7 +190,7 @@ async function draw(character: Character, typeface: string){
         });
     }
     
-    return canvas.toBuffer();
+    return canvas.toBuffer('image/jpeg');
 }
 
 function getGradient(ctx){
@@ -353,12 +364,90 @@ function emojiFileFor(utf16Code: string) : string{
     else if(fs.existsSync(u + '.0.png')) return u + '.0.png';
 }
 
-async function post(image : any, text : string){
-    const mediaId = await client.v1.uploadMedia(image, { mimeType: "image/png" });
-    await client.v2.tweet({
-        text: text,
-        media: { media_ids: [mediaId] }
+async function postToTwitter(image : Buffer, text : string){
+    try{
+        const mediaId = await twitterClient.v1.uploadMedia(image, { mimeType: "image/jpeg" });
+        await twitterClient.v2.tweet({
+            text: text,
+            media: { media_ids: [mediaId] }
+        });
+        return true;
+    }
+    catch(error){ return false }
+}
+
+async function postToTennessine(image: Buffer){
+    return new Promise<void>( (resolve, reject) => {
+        const postData = JSON.stringify({
+            'image' : image.toString('base64'),
+            'access_token' : process.env.SERVER_ACCESS_TOKEN
+        });
+        const options = {
+            hostname: "tennessine.co.uk",
+            post: 443,
+            path: "/unicode/upload.php",
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': postData.length
+            }
+        };
+        const uploadRequest = https.request(options, (response) => {
+            let body = "";
+            response.on("data", (chunk) => {
+                body += chunk;
+            });
+            response.on("end", () => {
+                if(response.statusCode == 200) resolve();
+                else{
+                    console.log(response.statusCode + " " + body);
+                    reject(response.statusCode);
+                }
+            });
+        });
+        uploadRequest.write(postData);
+        uploadRequest.end();
     });
+}
+
+async function postToInstagram(image: Buffer, text : string){
+    try{
+        await postToTennessine(image);
+    }
+    catch(statusCode){ return false }
+
+    const url = "https://tennessine.co.uk/unicode/next_image.jpg?cache=" + Date.now();
+    const mediaRequest = instagramClient.newPostPagePhotoMediaRequest(url, text);
+    try{
+        const mediaResponse = await mediaRequest.execute();
+
+        const queryContainerReadiness = (n : number = 0) => {
+            return new Promise( async (resolve) => {
+
+                const containerRequest = instagramClient.newGetContainerRequest(mediaResponse.getId());
+                const containerResponse = await containerRequest.execute();
+                
+                if(!containerResponse || !containerResponse.getContainerStatusCode() || containerResponse.getContainerStatusCode() != "FINISHED"){
+                    if(n >= 5) resolve(false);
+
+                    setTimeout( async () => {
+                        const newQuery = await queryContainerReadiness(n + 1);
+                        resolve(newQuery);
+                    }, 60000);
+                }
+                else resolve(true);
+
+            });
+        };
+        const isReady = await queryContainerReadiness();
+        if(!isReady) throw new Error("Upload failed");
+
+        const publishRequest = instagramClient.newPostPublishMediaRequest( mediaResponse.getId() );
+        await publishRequest.execute();
+        return true;
+    }
+    catch(error){ return false }
+    
 }
 
 function importUnihanReadings() : stringDict{
@@ -397,6 +486,7 @@ function init(){
     scheduleJob('0 */3 * * *', function(){
         createPost(han);
     });
+    createPost(han);
     
 }
 

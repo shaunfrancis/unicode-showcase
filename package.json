@@ -16,6 +16,7 @@
     "canvas": "^2.11.2",
     "dotenv": "^16.3.1",
     "fontkit": "^1.7.7",
+    "instagram-graph-api": "^5.0.1",
     "node-schedule": "^2.1.1",
     "twitter-api-v2": "^1.15.2",
     "unicharadata": "^9.0.0-alpha.6"
