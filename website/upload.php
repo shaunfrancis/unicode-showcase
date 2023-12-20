@@ -13,13 +13,13 @@
     }
 
     $image = base64_decode($data["image"]);
-    if(!image){
+    if(!$image){
         http_response_code(400);
         die("Bad Request");
     }
 
     $success = file_put_contents("next_image.jpg", $image);
-    if(!success){
+    if(!$success){
         http_response_code(500);
         die("Internal Server Error");
     }
