@@ -523,9 +523,8 @@ function getNotoDir(name) {
 function init() {
     var han = importUnihanReadings();
     registerFonts();
-    (0, node_schedule_1.scheduleJob)('0 */3 * * *', function () {
+    (0, node_schedule_1.scheduleJob)('0 */8 * * *', function () {
         createPost(han);
     });
-    createPost(han);
 }
 init();

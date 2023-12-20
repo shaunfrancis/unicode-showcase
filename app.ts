@@ -485,10 +485,9 @@ function init() : void {
 
     registerFonts();
     
-    scheduleJob('0 */3 * * *', function(){
+    scheduleJob('0 */8 * * *', function(){
         createPost(han);
     });
-    createPost(han);
     
 }
 
