@@ -9,6 +9,8 @@ import { scheduleJob } from 'node-schedule';
 import { TwitterApi } from 'twitter-api-v2';
 import { Client } from 'instagram-graph-api';
 
+import type {CanvasRenderingContext2D as NodeCanvasRenderingContext2D} from 'canvas';
+
 type stringDict = { [key:string]: string };
 interface Character {
     code: number,
@@ -30,7 +32,7 @@ const twitterClient = new TwitterApi({
 const instagramClient = new Client(process.env.INSTAGRAM_ACCESS_TOKEN, process.env.INSTAGRAM_PAGE_ID);
 
 
-async function createPost(han: stringDict, retryCount: number = 0){
+async function createPost(han: stringDict, retryCount: number = 0) : Promise<void> {
     if(retryCount >= 5) return;
 
     const character: Character = getCharacter();
@@ -49,7 +51,7 @@ async function createPost(han: stringDict, retryCount: number = 0){
     }, 120000);
 }
 
-function getCharacter() : Character{
+function getCharacter() : Character {
     const code : number = plannedSequence() || Math.round(Math.random()*129535);
     
     const symbol = String.fromCodePoint(code);
@@ -79,7 +81,7 @@ function plannedSequence() : number | false {
 
 }
 
-function getTypeface(character: Character) : string | false{
+function getTypeface(character: Character) : string | false {
     //Check each Noto font
     for(let i = 0; i < notos.length; i++){
         const font = fontkit.openSync( getNotoDir(notos[i]) );
@@ -97,7 +99,7 @@ function getTypeface(character: Character) : string | false{
     return false;
 }
 
-function emojiExistsFor(utf16Code : string) : boolean{
+function emojiExistsFor(utf16Code : string) : boolean {
     const u = 'emoji/u' + utf16Code;
     
     let standard = fs.existsSync(u + '.png');
@@ -106,7 +108,7 @@ function emojiExistsFor(utf16Code : string) : boolean{
     return ( standard || yellow ) ? true : false;
 }
 
-async function draw(character: Character, typeface: string){
+async function draw(character: Character, typeface: string) : Promise<Buffer> {
     const canvas = createCanvas(2880, 1800);
     const ctx = canvas.getContext('2d');
 
@@ -193,7 +195,7 @@ async function draw(character: Character, typeface: string){
     return canvas.toBuffer('image/jpeg');
 }
 
-function getGradient(ctx){
+function getGradient(ctx) : CanvasGradient {
     var grd = ctx.createLinearGradient(0,0,0,1800);
     
     var hsl1 = Math.round(Math.random()*359);
@@ -212,7 +214,7 @@ function getGradient(ctx){
     return grd;
 }
 
-function applyConfettiTo(ctx){
+function applyConfettiTo(ctx : NodeCanvasRenderingContext2D) : void {
     const colors = ["rgba(231,76,60,0.7)","rgba(230,126,34,0.7)","rgba(241,196,15,0.7)","rgba(26,188,156,0.7)","rgba(46,204,113,0.7)","rgba(52,152,219,0.7)","rgba(155,89,182,0.7)"];
     for(let i = 0; i < 1000; i++){
         var confetto = {
@@ -235,7 +237,7 @@ function applyConfettiTo(ctx){
     }
 }
 
-function applySnowTo(ctx){
+function applySnowTo(ctx : NodeCanvasRenderingContext2D) : void {
     for(let i = 0; i < 1000; i++){
         
         const flake = {
@@ -337,7 +339,7 @@ function applySnowTo(ctx){
     }
 }
 
-function getText(character: Character){
+function getText(character: Character) : string {
     const fragments = {
         intro: ["Please give a warm welcome to ","A round of applause for ","Put your hands together for ","Join us as we welcome ","Please welcome to the stage ","Let's give it up for ","It's time to show your appreciation for ","Let's make some noise for ","Say hello to ","Raise a glass to ","Let's hear it for "],
         description: ["","the one, the only, ","our old friend ","the very special ","the one-of-a-kind ","the one and only ","our friend ","the brilliant ","the fantastic ","the exquisite ","the super "],
@@ -358,13 +360,13 @@ function getText(character: Character){
     return intro + description + characterDescription + punctuation + outro;
 }
 
-function emojiFileFor(utf16Code: string) : string{
+function emojiFileFor(utf16Code: string) : string {
     let u = 'emoji/u' + utf16Code;
     if(fs.existsSync(u + '.png')) return u + '.png';
     else if(fs.existsSync(u + '.0.png')) return u + '.0.png';
 }
 
-async function postToTwitter(image : Buffer, text : string){
+async function postToTwitter(image : Buffer, text : string) : Promise<boolean> {
     try{
         const mediaId = await twitterClient.v1.uploadMedia(image, { mimeType: "image/jpeg" });
         await twitterClient.v2.tweet({
@@ -376,8 +378,8 @@ async function postToTwitter(image : Buffer, text : string){
     catch(error){ return false }
 }
 
-async function postToTennessine(image: Buffer){
-    return new Promise<void>( (resolve, reject) => {
+async function postToTennessine(image: Buffer) : Promise<number> {
+    return new Promise<number>( (resolve, reject) => {
         const postData = JSON.stringify({
             'image' : image.toString('base64'),
             'access_token' : process.env.SERVER_ACCESS_TOKEN
@@ -398,7 +400,7 @@ async function postToTennessine(image: Buffer){
                 body += chunk;
             });
             response.on("end", () => {
-                if(response.statusCode == 200) resolve();
+                if(response.statusCode == 200) resolve(200);
                 else{
                     console.log(response.statusCode + " " + body);
                     reject(response.statusCode);
@@ -410,7 +412,7 @@ async function postToTennessine(image: Buffer){
     });
 }
 
-async function postToInstagram(image: Buffer, text : string){
+async function postToInstagram(image: Buffer, text : string) : Promise<boolean> {
     try{
         await postToTennessine(image);
     }
@@ -450,7 +452,7 @@ async function postToInstagram(image: Buffer, text : string){
     
 }
 
-function importUnihanReadings() : stringDict{
+function importUnihanReadings() : stringDict {
     const han: stringDict = {};
     
     const db = fs.readFileSync('unihan-readings.txt','utf8');
@@ -465,7 +467,7 @@ function importUnihanReadings() : stringDict{
     return han;
 }
 
-function registerFonts(){
+function registerFonts() : void {
     notos.forEach( noto => { registerFont( getNotoDir(noto),  {family: 'Noto ' + noto } ) });
     registerFont('fonts/Cambria Math.ttf', {family: 'Cambria Math'});
 }
@@ -478,7 +480,7 @@ function getNotoDir(name: string) : string {
 
 }
 
-function init(){
+function init() : void {
     const han: stringDict = importUnihanReadings();
 
     registerFonts();

@@ -363,7 +363,7 @@ function postToTwitter(image, text) {
             switch (_a.label) {
                 case 0:
                     _a.trys.push([0, 3, , 4]);
-                    return [4 /*yield*/, twitterClient.v1.uploadMedia(image, { mimeType: "image/png" })];
+                    return [4 /*yield*/, twitterClient.v1.uploadMedia(image, { mimeType: "image/jpeg" })];
                 case 1:
                     mediaId = _a.sent();
                     return [4 /*yield*/, twitterClient.v2.tweet({
@@ -406,7 +406,7 @@ function postToTennessine(image) {
                         });
                         response.on("end", function () {
                             if (response.statusCode == 200)
-                                resolve();
+                                resolve(200);
                             else {
                                 console.log(response.statusCode + " " + body);
                                 reject(response.statusCode);
